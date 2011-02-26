@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Backbone.js| Twitter Example</title>
+    <link rel="stylesheet" href="http://code.jquery.com/mobile/1.0a3/jquery.mobile-1.0a3.min.css" />
+    <script src="http://code.jquery.com/jquery-1.5.1.min.js"></script>
+    <script src="http://code.jquery.com/mobile/1.0a3/jquery.mobile-1.0a3.min.js"></script>
+</head>
+<body>
+    <script src="http://ajax.microsoft.com/ajax/jquery.templates/beta1/jquery.tmpl.js"></script>
+    <script src="http://ajax.cdnjs.com/ajax/libs/underscore.js/1.1.4/underscore-min.js"></script>
+    <script src="http://ajax.cdnjs.com/ajax/libs/backbone.js/0.3.3/backbone-min.js"></script>
+
+    <script type="text/javascript">
+    /* this section will contain Model definition of a tweet */
+
+    function log(msg){
+	return;
+	if (console)
+	    console.log(msg);
+    }
+
+    Tweet = Backbone.Model.extend({
+		defaults: {
+		    screen_name: '_sunil_',
+		    text: 'This is no tweet dude :)',
+		    profile_pic: 'http://a3.twimg.com/profile_images/808008428/social_icon_normal.png'
+		},
+
+		initialize: function(args){
+		    this.set({html_id: 'tweet_' + this.cid});
+		    return;
+		}
+	    });
+    </script>
+
+    <script type="text/javascript">
+    /* this section will contain Model definition of a tweet */
+
+    TweetCollection = Backbone.Collection.extend({
+		model: Tweet,
+		initialize: function(args){
+		    return;
+		}
+	    });
+    </script>
+
+    <script type="text/javascript">
+
+    TweetView = Backbone.View.extend({
+	    tagName: 'li',
+	    initialize: function(){
+		_.bindAll(this, 'render', 'remove');
+		this.template = $('#tweet-template').template();
+		this.model.bind('change', this.render);
+		this.model.view = this;
+	    },
+	    events: {
+		    'click .remove': "remove"
+	    },
+	    render: function(){
+		$(this.el).html($.tmpl(this.template, this.model.toJSON()));
+		return this;
+	    },
+	    remove: function(){
+		alert('remove called' + this.model.cid);
+	    }
+	});
+
+    </script>
+
+    <script type="text/javascript">
+	TweetAppModel = Backbone.Model.extend({
+	    initialize: function () {
+		// init and store our MovieCollection in our app object
+	    	_.bindAll(this, 'load');
+		this.tweets = new TweetCollection();
+	    },
+	    load: function(term){
+		    /* HACK for storing app_model */
+		    app_model = this;
+		    $.getJSON('http://search.twitter.com/search.json?callback=?&q=' + term, function(data) {
+			app_model.view.hideLoading();
+			for(x in data.results){
+			    var tweet = new Tweet({screen_name: data.results[x].from_user,
+						    text: data.results[x].text,
+						    profile_pic: data.results[x].profile_image_url
+						});
+			    app_model.tweets.add(tweet);
+			    log('adding tweet from user ' + tweet.get('screen_name'));
+			}
+		});
+
+	    }
+	});
+    </script>
+
+
+    <script type="text/javascript">
+	AppView = Backbone.View.extend({
+		initialize: function(){
+		    _.bindAll(this, 'render', 'addTweet', 'search', 'resetView', 'searchOnEnter');
+		    this.model.tweets.bind('add', this.addTweet);
+		    this.model.tweets.bind('refresh', this.refreshAll);
+		    this.model.view = this;
+		    $('#search_term').focus();
+		},
+		events: {
+		    'click .search': "search",
+		    "keypress #search_term":  "searchOnEnter"
+		},
+		render: function(){
+		    /*$(this.el).html(this.template(this.model.toJSON()));*/
+		    $('#tweet-list').listview();
+		    return this;
+		},
+		addTweet: function(tweet){
+		    log('adding new tweet');
+		    $('#tweet-list').listview();
+		    var view = new TweetView({model: tweet});
+		    $('#tweet-list').append(view.render().el);
+		    $('#tweet-list').listview('refresh');
+		},
+		resetView: function(){
+		    var tweets = this.model.tweets;
+		    this.model.tweets.each(function(tweet){
+			    tweets.remove(tweet);
+			}); 
+		    $('#tweet-list').html('');
+		},
+		search: function(){
+		    this.resetView();
+		    this.showLoading();
+		    this.model.load($('#search_term').val());
+		},
+		searchOnEnter: function(e){
+		    if (e.keyCode != 13) {
+			    return;
+		    }
+		    this.search();
+		},
+		showLoading: function(){
+		    $.mobile.pageLoading();
+		},
+		hideLoading: function(){
+		    $.mobile.pageLoading(true);
+		}
+	    });
+    </script>
+
+    <script>
+	$(document).ready(function(){
+	    AppController = {
+		init: function(spec){
+		    this.model = new TweetAppModel();
+		    this.view = new AppView({el: $('#tweets-container'),
+					model: this.model});
+		    return this;
+		}
+	    };
+	    app_controller = AppController.init();
+	});
+    </script>
+
+    <script type="text/x-jquery-tmpl" id="tweet-template"> 
+	<img src="${profile_pic}" style="float:left; margin-right: 5px;">
+	<h3><a href="http://twitter.com/${screen_name}">${screen_name}</a></h3>
+	<p>${text}</p>
+    </script>
+    
+    <div data-role="page" data-theme="b"> 
+	<div data-role="header" > 
+	    <h1>Twitter Search</h1>
+	</div>
+	<div data-role="content" data-theme="d">
+	    <div id="tweets-container">
+		<input id="search_term" type="text" width="100"></input>
+		<a class="search" href="javascript:void(0);" data-role="button" data-theme="b" data-inline="true">search</a>
+		<ul id="tweet-list" date-role="listview" data-inset="true">
+		</ul>
+	    </div>
+	</div>
+	<div data-role="footer">
+	    <h1>.</h1>
+	</div>
+    </div>
+</body>
+</html>
