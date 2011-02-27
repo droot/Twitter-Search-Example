@@ -1,68 +1,63 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Backbone.js| Twitter Example</title>
+    <title>Backbone.js| Twitter Search Example</title>
+
+    <!--jquery and jquery mobile stuff-->
     <link rel="stylesheet" href="http://code.jquery.com/mobile/1.0a3/jquery.mobile-1.0a3.min.css" />
     <script src="http://code.jquery.com/jquery-1.5.1.min.js"></script>
     <script src="http://code.jquery.com/mobile/1.0a3/jquery.mobile-1.0a3.min.js"></script>
-</head>
-<body>
+
+    <!--jquery template library-->
     <script src="http://ajax.microsoft.com/ajax/jquery.templates/beta1/jquery.tmpl.js"></script>
+
+    <!--underscore and backbone.js from cdn-->
     <script src="http://ajax.cdnjs.com/ajax/libs/underscore.js/1.1.4/underscore-min.js"></script>
     <script src="http://ajax.cdnjs.com/ajax/libs/backbone.js/0.3.3/backbone-min.js"></script>
-
+</head>
+<body>
     <script type="text/javascript">
-    /* this section will contain Model definition of a tweet */
-
-    function log(msg){
-	return;
-	if (console)
-	    console.log(msg);
-    }
-
-    Tweet = Backbone.Model.extend({
+	/* model which stores information for an individual tweet */
+	Tweet = Backbone.Model.extend({
 		defaults: {
+		    /* you can have defaults for your model if any */
 		    screen_name: '_sunil_',
 		    text: 'This is no tweet dude :)',
 		    profile_pic: 'http://a3.twimg.com/profile_images/808008428/social_icon_normal.png'
 		},
-
-		initialize: function(args){
-		    this.set({html_id: 'tweet_' + this.cid});
-		    return;
-		}
-	    });
+	});
+    </script>
+    <script type="text/javascript">
+	/* collection that will store the twitter search results */
+    TweetCollection = Backbone.Collection.extend({ 
+			    model: Tweet /* collection contain model of types Tweet defined above*/
+		});
     </script>
 
     <script type="text/javascript">
-    /* this section will contain Model definition of a tweet */
-
-    TweetCollection = Backbone.Collection.extend({
-		model: Tweet,
-		initialize: function(args){
-		    return;
-		}
-	    });
-    </script>
-
-    <script type="text/javascript">
-
+    /* view that displays and handles user interaction with an individual Tweet */
     TweetView = Backbone.View.extend({
-	    tagName: 'li',
+	    tagName: 'li',  /* tag of root element for this view. Since it is part of list */
 	    initialize: function(){
+		/* ensuring that `this` points to this instance of view in context of functions */
 		_.bindAll(this, 'render', 'remove');
-		this.template = $('#tweet-template').template();
+		/* compiles jquery template for a tweet presentation. Jquery templates are being used */
+		this.template = $('#tweet-template').template(); 
+		/* binding to changes in underlying model, so that we can render to reflect the changes */
 		this.model.bind('change', this.render);
-		this.model.view = this;
+		this.model.view = this; /* ensuring view property of model points to this view */
 	    },
 	    events: {
+		    /* here you can declare events that you want to bind to in this view */
 		    'click .remove': "remove"
 	    },
 	    render: function(){
+		/* render function sets the new html in the rool element */
 		$(this.el).html($.tmpl(this.template, this.model.toJSON()));
 		return this;
 	    },
 	    remove: function(){
+		/* just a dummy function to demostrate event handling concept */
 		alert('remove called' + this.model.cid);
 	    }
 	});
@@ -70,27 +65,42 @@
     </script>
 
     <script type="text/javascript">
+	/* Here we define the main model for the entire App */
 	TweetAppModel = Backbone.Model.extend({
 	    initialize: function () {
-		// init and store our MovieCollection in our app object
+		// ensuring that `this` refers to this view when load gets invoked */ 
 	    	_.bindAll(this, 'load');
+		/* tweets collection will store the search results */
 		this.tweets = new TweetCollection();
 	    },
+	    reset: function(){
+		var tweets = this.tweets;
+		this.tweets.each(function(tweet){
+			tweets.remove(tweet);
+		}); 
+	    },
 	    load: function(term){
-		    /* HACK for storing app_model */
-		    app_model = this;
-		    $.getJSON('http://search.twitter.com/search.json?callback=?&q=' + term, function(data) {
-			app_model.view.hideLoading();
-			for(x in data.results){
-			    var tweet = new Tweet({screen_name: data.results[x].from_user,
-						    text: data.results[x].text,
-						    profile_pic: data.results[x].profile_image_url
-						});
-			    app_model.tweets.add(tweet);
-			    log('adding tweet from user ' + tweet.get('screen_name'));
+		/* function initiates search query for given term */
+		this.trigger('search-begin');
+		$.ajax({
+			url: 'http://search.twitter.com/search.json?callback=?&q=' + term,
+			context: this,
+			dataType: 'jsonp',
+			success: function(data){
+			    this.trigger('search-complete');
+			    for(x in data.results){
+				var tweet = new Tweet({screen_name: data.results[x].from_user,
+							text: data.results[x].text,
+							profile_pic: data.results[x].profile_image_url
+						    });
+				this.tweets.add(tweet);
+			    }
+			},
+			error: function(){
+			    this.trigger('search-complete');
+			    alert('Ooops....no donuts for us.. lets try later...');
 			}
-		});
-
+		    });
 	    }
 	});
     </script>
@@ -101,7 +111,8 @@
 		initialize: function(){
 		    _.bindAll(this, 'render', 'addTweet', 'search', 'resetView', 'searchOnEnter');
 		    this.model.tweets.bind('add', this.addTweet);
-		    this.model.tweets.bind('refresh', this.refreshAll);
+		    this.model.bind('search-begin', this.showLoading);
+		    this.model.bind('search-complete', this.hideLoading);
 		    this.model.view = this;
 		    $('#search_term').focus();
 		},
@@ -110,27 +121,21 @@
 		    "keypress #search_term":  "searchOnEnter"
 		},
 		render: function(){
-		    /*$(this.el).html(this.template(this.model.toJSON()));*/
 		    $('#tweet-list').listview();
 		    return this;
 		},
 		addTweet: function(tweet){
-		    log('adding new tweet');
 		    $('#tweet-list').listview();
 		    var view = new TweetView({model: tweet});
 		    $('#tweet-list').append(view.render().el);
 		    $('#tweet-list').listview('refresh');
 		},
 		resetView: function(){
-		    var tweets = this.model.tweets;
-		    this.model.tweets.each(function(tweet){
-			    tweets.remove(tweet);
-			}); 
+		    this.model.reset();
 		    $('#tweet-list').html('');
 		},
 		search: function(){
 		    this.resetView();
-		    this.showLoading();
 		    this.model.load($('#search_term').val());
 		},
 		searchOnEnter: function(e){
